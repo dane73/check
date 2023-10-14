@@ -49,7 +49,7 @@ def add_task(stdscr, tasks):
 
         # Update the screen with the current input string
         stdscr.addstr(height-1, 10, " " * (width-11))  # Clear previous input
-    stdscr.addstr(height-1, 0, " " * (width-1))
+        stdscr.addstr(height-1, 10, input_string)
     tasks.append(Task() if not input_string else Task(input_string))
     #task gets default name 'unnamed' if user doesnt give a title
 
