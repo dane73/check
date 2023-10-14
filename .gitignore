@@ -1,0 +1,9 @@
+#Ignore "venv"
+venv/
+
+#Ignore tasks.json
+tasks.json
+
+#other
+__pychache__/
+
