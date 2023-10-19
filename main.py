@@ -12,19 +12,31 @@ class Task:
         self.done = done
         self.title = title
 
+    def required_space(self, stdscr):
+        """calculates how many lines EXTRA the task is going to need based on the text size and 
+          window width"""
+        _, width = stdscr.getmaxyx()
+        return int(len(self.title)/(width-3))
+
     def display(self, stdscr, position):
         """displays the task given a y-Coordinate"""
         curses.start_color()
         curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-        stdscr.addstr(position, 0, "[ ]")
-        stdscr.addstr(position, 1, f"{'x' if self.done else ' '}",
+        stdscr.addstr(position, 1, "[ ]")
+        stdscr.addstr(position, 2, f"{'x' if self.done else ' '}",
                   curses.color_pair(1) if self.done else curses.A_NORMAL)
         # Use color pair 1 for 'x'
-        stdscr.addstr(position, 3, self.title)
+        if self.required_space(stdscr) < 1:
+            stdscr.addstr(position, 4, self.title)
+        else:
+            _, width = stdscr.getmaxyx()
+            for i in range(self.required_space(stdscr)+1):
+                stdscr.addstr(position + i, 4, self.title[(i*(width-4)):((i+1)*(width-4))])
 
     def check(self):
         """checks or unchecks a task"""
         self.done = not self.done
+
 
 def user_prompt(stdscr, input_string, prompt):
     """prompts user given an input string"""
@@ -49,13 +61,16 @@ def user_prompt(stdscr, input_string, prompt):
             if len(input_string) > 0:
                 input_string = input_string[:-1]
             else:
-                return None# if user presses Backspace when no input, the adding of a task is canceled
+                return None# if no input, backspace to cancel
         if 32 <= key <= 126:  # ASCII values for printable characters
             input_string += chr(key)
 
         # Update the screen with the current input string
-        stdscr.addstr(height-1, len(prompt), " " * (width-len(prompt)-1))  # Clear previous input
-        stdscr.addstr(height-1, len(prompt), input_string)
+        try:
+            stdscr.addstr(height-1, len(prompt), " " * (width-len(prompt)-1))  # Clear previous input
+            stdscr.addstr(height-1, len(prompt), input_string)
+        except: #Will throw exception when resize during task-adding
+            pass
 
     return input_string
 
@@ -95,11 +110,17 @@ def main(stdscr):
 
         height, _ = stdscr.getmaxyx()
 
+        offset = 0
+        screen_selector_pos = [i for i in range(len(tasks))]
+
         for index, task in enumerate(tasks):
-            task.display(stdscr, index)
+            task.display(stdscr, index+offset)
+            screen_selector_pos[index] = offset + index
+            offset += task.required_space(stdscr)
 
         curses.curs_set(0) #Sets the real cursor invisible
-        stdscr.chgat(selector_pos, 3, curses.A_REVERSE)
+        stdscr.chgat(screen_selector_pos[selector_pos], 4, len(tasks[selector_pos].title), curses.A_UNDERLINE)
+        stdscr.addstr(screen_selector_pos[selector_pos], 0, ">")
         #stdscr.refresh()
 
         key = stdscr.getch() #Listen for user input
@@ -117,6 +138,7 @@ def main(stdscr):
                 if selector_pos < height-1 and selector_pos < len(tasks)-1:
                     selector_pos += 1
             case 105: # i for editing (based on insert in vim)
+                curses.curs_set(1)
                 edit_task(stdscr, tasks, selector_pos)
             case 100: # d for delete
                 if tasks[selector_pos]:
