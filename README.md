@@ -17,10 +17,10 @@ Check will automatically create the needed files. There are no external librarie
 | Key        | Command     |
 |:----------:|:-----------:|
 | q          | exit        |
-| j / <down> | down        |
-| k / <up>   | up          |
-| <space>    | new task    |
-| <enter>    | (un)check   |
+| j / \<down> | down        |
+| k / \<up>   | up          |
+| \<space>    | new task    |
+| \<enter>    | (un)check   |
 | d          | delete task |
 | e          | edit task   |
 
