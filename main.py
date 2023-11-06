@@ -1,5 +1,4 @@
 """Simple to-do app"""
-
 import json
 import curses
 from curses import wrapper
@@ -26,17 +25,16 @@ class Task:
         stdscr.addstr(position, 2, f"{'x' if self.done else ' '}",
                   curses.color_pair(1) if self.done else curses.A_NORMAL)
         # Use color pair 1 for 'x'
-        if self.required_space(stdscr) < 1:
+        if self.required_space(stdscr) < 1: #print one-line tasks
             stdscr.addstr(position, 4, self.title)
-        else:
+        else: #print multi line tasks
             _, width = stdscr.getmaxyx()
-            for i in range(self.required_space(stdscr)+1):
+            for i in range(self.required_space(stdscr)+1): #only prints next to Bracket line
                 stdscr.addstr(position + i, 4, self.title[(i*(width-4)):((i+1)*(width-4))])
 
     def check(self):
         """checks or unchecks a task"""
         self.done = not self.done
-
 
 def user_prompt(stdscr, input_string, prompt):
     """prompts user given an input string"""
@@ -44,6 +42,8 @@ def user_prompt(stdscr, input_string, prompt):
     stdscr.addstr(height-1, 0, prompt)
 
     stdscr.addstr(height-1, len(prompt), input_string)
+
+    cy, cx = stdscr.getyx()
 
     while True:
 
@@ -59,16 +59,32 @@ def user_prompt(stdscr, input_string, prompt):
             #curses.KEY_BACKSPACE for linux terminal, 127 for macos
             # Handle backspace (delete last character
             if len(input_string) > 0:
-                input_string = input_string[:-1]
+                if cx < len(prompt) + 1:
+                    continue
+                index = cx - len(prompt) - 1
+                input_string = input_string[:index] + input_string[index+1:]
+                cx -= 1
             else:
                 return None# if no input, backspace to cancel
         if 32 <= key <= 126:  # ASCII values for printable characters
-            input_string += chr(key)
+            index = cx - len(prompt)
+            input_string = input_string[:index] + chr(key) + input_string[index:]
+            cx += 1
+
+        if curses.KEY_LEFT == key:
+            if cx < len(prompt)+1:
+                continue
+            cx -= 1
+        if curses.KEY_RIGHT == key:
+            if cx > len(prompt + input_string)-1:
+                continue
+            cx += 1
 
         # Update the screen with the current input string
         try:
-            stdscr.addstr(height-1, len(prompt), " " * (width-len(prompt)-1))  # Clear previous input
+            stdscr.addstr(height-1, len(prompt), " " * (width-len(prompt)-1))# Clear previous input
             stdscr.addstr(height-1, len(prompt), input_string)
+            stdscr.move(cy, cx)
         except: #Will throw exception when resize during task-adding
             pass
 
@@ -87,8 +103,23 @@ def edit_task(stdscr, tasks, task):
     if new_task_name is not None:
         tasks[task].title = "Unnamed" if len(new_task_name) == 0 else new_task_name
 
+def print_welcome(stdscr, height, width):
+    """Prints screen that occurs when no there are tasks"""
+    stdscr.addstr(0, 1, " " * (width -1))
+    for i in range(height):
+        stdscr.addch(i, 0, '~')
+    stdscr.addstr(int(height/2)-3, int(width/2)-13, "Check - a simple to-do app")
+    stdscr.addstr(int(height/2)-1, int(width/2)-22, "Type:    q to exit")
+    stdscr.addstr(int(height/2), int(width/2)-13, "j/k or <up>/<down> for moving selector")
+    stdscr.addstr(int(height/2)+1, int(width/2)-13, "<space> to add task")
+    stdscr.addstr(int(height/2)+2, int(width/2)-13, "<enter> to (un)check")
+    stdscr.addstr(int(height/2)+3, int(width/2)-13, "d to delete task")
+    stdscr.addstr(int(height/2)+4, int(width/2)-13, "e to edit task")
+    curses.curs_set(0)
+
 def main(stdscr):
     """Main function containing 'action loop' """
+
 
 
     #loads data form tasks.json file
@@ -97,59 +128,88 @@ def main(stdscr):
         with open('tasks.json', 'r', encoding='utf-8') as json_file:
             loaded_tasks = json.load(json_file)
 
-        #parsing json objects into Task objects
         tasks = [Task(task["title"], task["done"]) for task in loaded_tasks]
     except: # if no json file exists or it is empty
         tasks = []
 
-    selector_pos = 0 #sets the position of selector
+    selector_pos = 0
+
+    if len(tasks) == 0:
+        notask = True
+    else:
+        notask = False
 
     #main event loop
-
     while True:
 
-        height, _ = stdscr.getmaxyx()
+        try: # try catch prevents program from crashing while squished
 
-        offset = 0
-        screen_selector_pos = [i for i in range(len(tasks))]
+            height, width = stdscr.getmaxyx()
 
-        for index, task in enumerate(tasks):
-            task.display(stdscr, index+offset)
-            screen_selector_pos[index] = offset + index
-            offset += task.required_space(stdscr)
+            if notask:
+                print_welcome(stdscr, height, width)
+            else: #print tasks
+                offset = 0
+                screen_selector_pos = list(range(len(tasks)))
 
-        curses.curs_set(0) #Sets the real cursor invisible
-        stdscr.chgat(screen_selector_pos[selector_pos], 4, len(tasks[selector_pos].title), curses.A_UNDERLINE)
-        stdscr.addstr(screen_selector_pos[selector_pos], 0, ">")
-        #stdscr.refresh()
+                for index, task in enumerate(tasks):
+                    try:
+                        task.display(stdscr, index+offset)
+                    except:
+                        pass
+                    screen_selector_pos[index] = offset + index
+                    offset += task.required_space(stdscr)
 
-        key = stdscr.getch() #Listen for user input
+                curses.curs_set(0) #Sets the real cursor invisible
+                stdscr.chgat(screen_selector_pos[selector_pos],
+                             4,
+                             len(tasks[selector_pos].title),
+                             curses.A_UNDERLINE)
+                stdscr.addstr(screen_selector_pos[selector_pos], 0, ">")
 
-        match key:
-            case 32: #Press Space key to add task
-                curses.curs_set(1) #Makes cursor visible
-                add_task(stdscr, tasks)
-            case 113: #Press 'q' to exit
-                break
-            case 107 | curses.KEY_UP: # k for going up
-                if selector_pos > 0:
-                    selector_pos -= 1
-            case 106 | curses.KEY_DOWN: # j for going down
-                if selector_pos < height-1 and selector_pos < len(tasks)-1:
-                    selector_pos += 1
-            case 105: # i for editing (based on insert in vim)
-                curses.curs_set(1)
-                edit_task(stdscr, tasks, selector_pos)
-            case 100: # d for delete
-                if tasks[selector_pos]:
-                    del tasks[selector_pos]
-                    if selector_pos is len(tasks): #handles case when last task gets deleted
-                        selector_pos -= 1 #prevents selector from selecting nothing
-            case 10: #Enter for marking tasks
-                if tasks[selector_pos]:
-                    tasks[selector_pos].check()
+            key = stdscr.getch() #Listen for user input
 
-        stdscr.clear()
+            match key:
+                case 32: #Press Space key to add task
+                    curses.curs_set(1) #Makes cursor visible
+                    add_task(stdscr, tasks)
+                    if notask:
+                        notask = False
+                case 113: #Press 'q' to exit
+                    break
+                case 107 | curses.KEY_UP: # k for going up
+                    if notask:
+                        continue
+                    if selector_pos > 0:
+                        selector_pos -= 1
+                case 106 | curses.KEY_DOWN: # j for going down
+                    if notask:
+                        continue
+                    if selector_pos < height-1 and selector_pos < len(tasks)-1:
+                        selector_pos += 1
+                case 101: # e for edit
+                    if notask:
+                        continue
+                    curses.curs_set(1)
+                    edit_task(stdscr, tasks, selector_pos)
+                case 100: # d for delete
+                    if notask:
+                        continue
+                    if tasks[selector_pos]:
+                        del tasks[selector_pos]
+                        if len(tasks) == 0:
+                            notask = True
+                            continue
+                        if selector_pos is len(tasks): #handles case when last task gets deleted
+                            selector_pos -= 1 #prevents selector from selecting nothing
+                case 10: #Enter for marking tasks
+                    if tasks[selector_pos]:
+                        tasks[selector_pos].check()
+
+            stdscr.clear()
+
+        except:
+            pass
 
     #Save tasks to json file (new tasks only get saved to the
     #file once the programm is closed by pressing enter)
