@@ -2,6 +2,8 @@
 
 Check is a simple terminal based to-do app implemented in Python
 
+![Example](example.png)
+
 ## Usage
 
 Simply run:
