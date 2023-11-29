@@ -2,48 +2,15 @@
 import json
 import curses
 from curses import wrapper
+from task import Task
 
-class Task:
-    """Implemention of task object"""
-
-    def __init__(self, title="Unnamed", done=False):
-        """constructor of Task"""
-        self.done = done
-        self.title = title
-
-    def required_space(self, stdscr):
-        """calculates how many lines EXTRA the task is going to need based on the text size and 
-          window width"""
-        _, width = stdscr.getmaxyx()
-        return int(len(self.title)/(width-3))
-
-    def display(self, stdscr, position):
-        """displays the task given a y-Coordinate"""
-        curses.start_color()
-        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-        stdscr.addstr(position, 1, "[ ]")
-        stdscr.addstr(position, 2, f"{'x' if self.done else ' '}",
-                  curses.color_pair(1) if self.done else curses.A_NORMAL)
-        # Use color pair 1 for 'x'
-        if self.required_space(stdscr) < 1: #print one-line tasks
-            stdscr.addstr(position, 4, self.title)
-        else: #print multi line tasks
-            _, width = stdscr.getmaxyx()
-            for i in range(self.required_space(stdscr)+1): #only prints next to Bracket line
-                stdscr.addstr(position + i, 4, self.title[(i*(width-4)):((i+1)*(width-4))])
-
-    def check(self):
-        """checks or unchecks a task"""
-        self.done = not self.done
-
-def user_prompt(stdscr, input_string, prompt):
+def user_prompt(stdscr, input_string, prompt, height):
     """prompts user given an input string"""
-    height, _ = stdscr.getmaxyx()
     stdscr.addstr(height-1, 0, prompt)
 
     stdscr.addstr(height-1, len(prompt), input_string)
 
-    cy, cx = stdscr.getyx()
+    cy, cx = stdscr.getyx() #cursor position
 
     while True:
 
@@ -52,21 +19,23 @@ def user_prompt(stdscr, input_string, prompt):
         # Get user input
         key = stdscr.getch()
 
-        # Check if Enter is pressed
         if key == 10:  # 10 is for Enter
             break #Promp ends when enter is pressed
+
         if key == curses.KEY_BACKSPACE or key == 127:  # Handle Backspace
             #curses.KEY_BACKSPACE for linux terminal, 127 for macos
-            # Handle backspace (delete last character
-            if len(input_string) > 0:
-                if cx < len(prompt) + 1:
-                    continue
-                index = cx - len(prompt) - 1
-                input_string = input_string[:index] + input_string[index+1:]
-                cx -= 1
-            else:
-                return None# if no input, backspace to cancel
-        if 32 <= key <= 126:  # ASCII values for printable characters
+
+            if len(input_string) == 0:
+                return None
+
+            if cx < len(prompt) + 1: #check bound for cursor at end of prompt
+                continue
+
+            index = cx - len(prompt) - 1
+            input_string = input_string[:index] + input_string[index+1:]
+            cx -= 1
+
+        if 32 <= key <= 126:
             index = cx - len(prompt)
             input_string = input_string[:index] + chr(key) + input_string[index:]
             cx += 1
@@ -75,6 +44,7 @@ def user_prompt(stdscr, input_string, prompt):
             if cx < len(prompt)+1:
                 continue
             cx -= 1
+
         if curses.KEY_RIGHT == key:
             if cx > len(prompt + input_string)-1:
                 continue
@@ -90,21 +60,20 @@ def user_prompt(stdscr, input_string, prompt):
 
     return input_string
 
-def add_task(stdscr, tasks):
+def add_task(stdscr, tasks, height):
     """Handles the prompt for adding a task and adds the task to a list of task objects"""
-    task_name = user_prompt(stdscr, "", "Add task: ")
+    task_name = user_prompt(stdscr, "", "Add task: ", height)
     if task_name is not None:
         tasks.append(Task() if len(task_name) == 0 else Task(task_name))
-    #task gets default name 'unnamed' if user doesnt give a title
 
-def edit_task(stdscr, tasks, task):
+def edit_task(stdscr, tasks, task, height):
     """editing of a task"""
-    new_task_name = user_prompt(stdscr, tasks[task].title, "Edit task: ")
+    new_task_name = user_prompt(stdscr, tasks[task].title, "Edit task: ", height)
     if new_task_name is not None:
         tasks[task].title = "Unnamed" if len(new_task_name) == 0 else new_task_name
 
 def print_welcome(stdscr, height, width):
-    """Prints screen that occurs when no there are tasks"""
+    """Prints screen that occurs when no tasks are there"""
     stdscr.addstr(0, 1, " " * (width -1))
     for i in range(height):
         stdscr.addch(i, 0, '~')
@@ -117,10 +86,26 @@ def print_welcome(stdscr, height, width):
     stdscr.addstr(int(height/2)+4, int(width/2)-13, "e to edit task")
     curses.curs_set(0)
 
+def print_tasks(stdscr, tasks, selector_pos, width):
+    offset = 0
+    screen_selector_pos = list(range(len(tasks)))
+
+    for index, task in enumerate(tasks):
+        try:
+            task.display(stdscr, index+offset, width)
+        except:
+            pass
+        screen_selector_pos[index] = offset + index
+        offset += task.required_space(stdscr, width)
+
+    curses.curs_set(0) #Sets the real cursor invisible
+    stdscr.chgat(screen_selector_pos[selector_pos],
+                 4,
+                 len(tasks[selector_pos].title),
+                 curses.A_UNDERLINE)
+    stdscr.addstr(screen_selector_pos[selector_pos], 0, ">")
 def main(stdscr):
     """Main function containing 'action loop' """
-
-
 
     #loads data form tasks.json file
     try:
@@ -132,12 +117,10 @@ def main(stdscr):
     except: # if no json file exists or it is empty
         tasks = []
 
+
     selector_pos = 0
 
-    if len(tasks) == 0:
-        notask = True
-    else:
-        notask = False
+    notask = len(tasks) == 0
 
     #main event loop
     while True:
@@ -148,31 +131,15 @@ def main(stdscr):
 
             if notask:
                 print_welcome(stdscr, height, width)
-            else: #print tasks
-                offset = 0
-                screen_selector_pos = list(range(len(tasks)))
+            else:
+                print_tasks(stdscr, tasks, selector_pos, width)
 
-                for index, task in enumerate(tasks):
-                    try:
-                        task.display(stdscr, index+offset)
-                    except:
-                        pass
-                    screen_selector_pos[index] = offset + index
-                    offset += task.required_space(stdscr)
-
-                curses.curs_set(0) #Sets the real cursor invisible
-                stdscr.chgat(screen_selector_pos[selector_pos],
-                             4,
-                             len(tasks[selector_pos].title),
-                             curses.A_UNDERLINE)
-                stdscr.addstr(screen_selector_pos[selector_pos], 0, ">")
-
-            key = stdscr.getch() #Listen for user input
+            key = stdscr.getch()
 
             match key:
                 case 32: #Press Space key to add task
                     curses.curs_set(1) #Makes cursor visible
-                    add_task(stdscr, tasks)
+                    add_task(stdscr, tasks, height)
                     if notask:
                         notask = False
                 case 113: #Press 'q' to exit
@@ -191,7 +158,7 @@ def main(stdscr):
                     if notask:
                         continue
                     curses.curs_set(1)
-                    edit_task(stdscr, tasks, selector_pos)
+                    edit_task(stdscr, tasks, selector_pos, height)
                 case 100: # d for delete
                     if notask:
                         continue
@@ -212,11 +179,11 @@ def main(stdscr):
             pass
 
     #Save tasks to json file (new tasks only get saved to the
-    #file once the programm is closed by pressing enter)
+    #file once the programm is closed by pressing 'q')
 
-    serialized_tasks = [task.__dict__ for task in tasks] #serialization of loaded_tasks
+    serialized_tasks = [task.__dict__ for task in tasks]
 
     with open('tasks.json', 'w', encoding='utf-8') as json_file:
-        json.dump(serialized_tasks, json_file) #saving new tasks by overwriting
+        json.dump(serialized_tasks, json_file) #overwrites!
 
 wrapper(main)
