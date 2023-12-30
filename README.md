@@ -1,18 +1,27 @@
-## Check
+# Check
 
 Check is a simple terminal based to-do app implemented in Python
 
-![Example](example.png)
+![Example](doc/example.png)
+
+## Requirements
+
+* Python (`>=3.10`)
+
+Check uses the `curses` module, this means there are no extra dependencies.
 
 ## Usage
 
 Simply run:
-
 ```
-python3 main.py
+python3 check.py
 ```
-
-Check will automatically create the needed files. There are no external libraries. Your tasks automatically get saved.
+or
+```
+chmod +x check.py
+./check.py
+```
+Check automatically makes creates a tasks.json file where all the tasks are saved.
 
 ### Commands
 

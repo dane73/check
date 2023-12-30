@@ -1,10 +1,10 @@
 #Ignore "venv"
 venv/
 
-#Ignore tasks.json
 tasks.json
+check.log
 
 #other
-__pychache__/*
-__pychache__/
+__pycache__/*
+__pycache__/
 
